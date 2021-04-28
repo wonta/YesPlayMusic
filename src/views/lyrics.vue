@@ -1,6 +1,24 @@
 <template>
   <transition name="slide-up">
     <div class="lyrics-page" :class="{ 'no-lyric': noLyric }">
+      <div
+        v-if="settings.lyricsBackground !== false"
+        :class="[
+          'lyrics-background',
+          { 'dynamic-background': settings.lyricsBackground === 'dynamic' },
+        ]"
+      >
+        <div
+          v-show="showLyrics"
+          class="top-right"
+          :style="{ backgroundImage: `url(${bgImageUrl})` }"
+        />
+        <div
+          v-show="showLyrics"
+          class="bottom-left"
+          :style="{ backgroundImage: `url(${bgImageUrl})` }"
+        />
+      </div>
       <div class="left-side">
         <div>
           <div class="cover">
@@ -15,128 +33,151 @@
           <div class="controls">
             <div class="top-part">
               <div class="track-info">
-                <div class="title" :title="currentTrack.name"
-                  ><router-link
+                <div class="title" :title="currentTrack.name">
+                  <router-link
                     :to="`/${player.playlistSource.type}/${player.playlistSource.id}`"
                     @click.native="toggleLyrics"
-                    >{{ currentTrack.name }}</router-link
-                  ></div
-                >
-                <div class="subtitle"
-                  ><router-link
-                    :to="`/artist/${currentTrack.ar[0].id}`"
+                    >{{ currentTrack.name }}
+                  </router-link>
+                </div>
+                <div class="subtitle">
+                  <router-link
+                    :to="`/artist/${artist.id}`"
                     @click.native="toggleLyrics"
-                    >{{ currentTrack.ar[0].name }}</router-link
-                  >
+                    >{{ artist.name }}
+                  </router-link>
                   -
                   <router-link
-                    :to="`/album/${currentTrack.al.id}`"
+                    :to="`/album/${album.id}`"
+                    :title="album.name"
                     @click.native="toggleLyrics"
-                    :title="currentTrack.al.name"
-                    >{{ currentTrack.al.name }}</router-link
-                  ></div
-                >
+                    >{{ album.name }}
+                  </router-link>
+                </div>
               </div>
               <div class="buttons">
                 <button-icon
-                  @click.native="playerRef.likeCurrentSong"
                   :title="$t('player.like')"
-                  ><svg-icon
+                  @click.native="likeATrack(player.currentTrack.id)"
+                >
+                  <svg-icon
                     :icon-class="
-                      playerRef.isCurrentTrackLiked ? 'heart-solid' : 'heart'
+                      player.isCurrentTrackLiked ? 'heart-solid' : 'heart'
                     "
-                /></button-icon>
+                  />
+                </button-icon>
                 <!-- <button-icon @click.native="openMenu" title="Menu"
                   ><svg-icon icon-class="more"
                 /></button-icon> -->
               </div>
             </div>
             <div class="progress-bar">
-              <span>{{ formatTrackTime(progress) || "0:00" }}</span>
+              <span>{{ formatTrackTime(player.progress) || '0:00' }}</span>
               <div class="slider">
                 <vue-slider
-                  v-model="progress"
+                  v-model="player.progress"
                   :min="0"
-                  :max="progressMax"
+                  :max="player.currentTrackDuration + 1"
                   :interval="1"
                   :drag-on-click="true"
                   :duration="0"
-                  :dotSize="12"
+                  :dot-size="12"
                   :height="2"
-                  :tooltipFormatter="formatTrackTime"
-                  @drag-end="setSeek"
-                  ref="progress"
-                ></vue-slider
-              ></div>
-              <span>{{ formatTrackTime(progressMax) }}</span>
+                  :tooltip-formatter="formatTrackTime"
+                  :lazy="true"
+                ></vue-slider>
+              </div>
+              <span>{{ formatTrackTime(player.currentTrackDuration) }}</span>
             </div>
             <div class="media-controls">
               <button-icon
-                @click.native="playerRef.repeat"
+                v-show="!player.isPersonalFM"
                 :title="
                   player.repeatMode === 'one'
                     ? $t('player.repeatTrack')
                     : $t('player.repeat')
                 "
                 :class="{ active: player.repeatMode !== 'off' }"
+                @click.native="player.switchRepeatMode"
               >
                 <svg-icon
-                  icon-class="repeat"
                   v-show="player.repeatMode !== 'one'"
+                  icon-class="repeat"
                 />
                 <svg-icon
-                  icon-class="repeat-1"
                   v-show="player.repeatMode === 'one'"
+                  icon-class="repeat-1"
                 />
               </button-icon>
               <div class="middle">
                 <button-icon
-                  @click.native="playerRef.previous"
+                  v-show="!player.isPersonalFM"
                   :title="$t('player.previous')"
-                  ><svg-icon icon-class="previous"
-                /></button-icon>
+                  @click.native="player.playPrevTrack"
+                >
+                  <svg-icon icon-class="previous" />
+                </button-icon>
                 <button-icon
-                  @click.native="playerRef.play"
+                  v-show="player.isPersonalFM"
+                  title="不喜欢"
+                  @click.native="player.moveToFMTrash"
+                >
+                  <svg-icon icon-class="thumbs-down" />
+                </button-icon>
+                <button-icon
+                  id="play"
                   :title="$t(player.playing ? 'player.pause' : 'player.play')"
-                  ><svg-icon :icon-class="playerRef.playing ? 'pause' : 'play'"
-                /></button-icon>
+                  @click.native="player.playOrPause"
+                >
+                  <svg-icon :icon-class="player.playing ? 'pause' : 'play'" />
+                </button-icon>
                 <button-icon
-                  @click.native="playerRef.next"
                   :title="$t('player.next')"
-                  ><svg-icon icon-class="next"
-                /></button-icon>
+                  @click.native="player.playNextTrack"
+                >
+                  <svg-icon icon-class="next" />
+                </button-icon>
               </div>
               <button-icon
-                @click.native="playerRef.shuffle"
+                v-show="!player.isPersonalFM"
                 :title="$t('player.shuffle')"
                 :class="{ active: player.shuffle }"
-                ><svg-icon icon-class="shuffle"
-              /></button-icon>
+                @click.native="player.switchShuffle"
+              >
+                <svg-icon icon-class="shuffle" />
+              </button-icon>
             </div>
           </div>
         </div>
       </div>
       <div class="right-side">
         <transition name="slide-fade">
-          <div class="lyrics-container" ref="lyricsContainer" v-show="!noLyric">
-            <div class="line" id="line-1"></div>
+          <div
+            v-show="!noLyric"
+            ref="lyricsContainer"
+            class="lyrics-container"
+            :style="lyricFontSize"
+          >
+            <div id="line-1" class="line"></div>
             <div
+              v-for="(line, index) in lyricWithTranslation"
+              :id="`line${index}`"
+              :key="index"
               class="line"
               :class="{
                 highlight: highlightLyricIndex === index,
               }"
-              :style="lineStyles"
-              v-for="(line, index) in lyricWithTranslation"
-              :key="index"
-              :id="`line${index}`"
-              @click="seek(line.time)"
+              @click="clickLyricLine(line.time)"
+              @dblclick="clickLyricLine(line.time, true)"
               ><span v-html="formatLine(line)"></span
             ></div>
           </div>
         </transition>
       </div>
       <div class="close-button" @click="toggleLyrics">
-        <button><svg-icon icon-class="arrow-down" /></button>
+        <button>
+          <svg-icon icon-class="arrow-down" />
+        </button>
       </div>
     </div>
   </transition>
@@ -146,15 +187,16 @@
 // The lyrics page of Apple Music is so gorgeous, so I copy the design.
 // Some of the codes are from https://github.com/sl1673495/vue-netease-music
 
-import { mapState, mapMutations } from "vuex";
-import VueSlider from "vue-slider-component";
-import { formatTrackTime } from "@/utils/common";
-import { getLyric } from "@/api/track";
-import { lyricParser } from "@/utils/lyrics";
-import ButtonIcon from "@/components/ButtonIcon.vue";
+import { mapState, mapMutations, mapActions } from 'vuex';
+import VueSlider from 'vue-slider-component';
+import { formatTrackTime } from '@/utils/common';
+import { getLyric } from '@/api/track';
+import { lyricParser } from '@/utils/lyrics';
+import { disableScrolling, enableScrolling } from '@/utils/ui';
+import ButtonIcon from '@/components/ButtonIcon.vue';
 
 export default {
-  name: "Lyrics",
+  name: 'Lyrics',
   components: {
     VueSlider,
     ButtonIcon,
@@ -169,23 +211,26 @@ export default {
     };
   },
   computed: {
-    ...mapState(["player"]),
+    ...mapState(['player', 'settings', 'showLyrics']),
     currentTrack() {
       return this.player.currentTrack;
     },
     imageUrl() {
-      return this.player.currentTrack.al.picUrl + "?param=1024y1024";
+      return this.player.currentTrack?.al?.picUrl + '?param=1024y1024';
+    },
+    bgImageUrl() {
+      return this.player.currentTrack?.al?.picUrl + '?param=500y500';
     },
     progress: {
       get() {
-        return this.$parent.$refs.player.progress;
+        return this.playerRef.progress;
       },
       set(value) {
-        this.$parent.$refs.player.setProgress(value);
+        this.playerRef.setProgress(value);
       },
     },
     progressMax() {
-      return this.$parent.$refs.player.progressMax;
+      return this.playerRef.progressMax;
     },
     lyricWithTranslation() {
       let ret = [];
@@ -195,7 +240,7 @@ export default {
       );
       // content统一转换数组形式
       if (lyricFiltered.length) {
-        lyricFiltered.forEach((l) => {
+        lyricFiltered.forEach(l => {
           const { rawTime, time, content } = l;
           const lyricItem = { time, content, contents: [content] };
           const sameTimeTLyric = this.tlyric.find(
@@ -218,22 +263,38 @@ export default {
       }
       return ret;
     },
-    haveTranslation() {
-      return this.tlyric.length > 0;
-    },
-    lineStyles() {
+    lyricFontSize() {
       return {
-        fontSize: this.haveTranslation ? "28px" : "36px",
+        fontSize: `${this.$store.state.settings.lyricFontSize || 28}px`,
       };
     },
     playerRef() {
-      return this.$parent.$refs.player;
-    },
-    showLyrics() {
-      return this.$store.state.showLyrics;
+      return this.$parent.$refs.player ? this.$parent.$refs.player : {};
     },
     noLyric() {
       return this.lyric.length == 0;
+    },
+    artist() {
+      return this.currentTrack?.ar
+        ? this.currentTrack.ar[0]
+        : { id: 0, name: 'unknown' };
+    },
+    album() {
+      return this.currentTrack?.al || { id: 0, name: 'unknown' };
+    },
+  },
+  watch: {
+    currentTrack() {
+      this.getLyric();
+    },
+    showLyrics(show) {
+      if (show) {
+        this.setLyricsInterval();
+        disableScrolling();
+      } else {
+        clearInterval(this.lyricsInterval);
+        enableScrolling();
+      }
     },
   },
   created() {
@@ -243,9 +304,11 @@ export default {
     clearInterval(this.lyricsInterval);
   },
   methods: {
-    ...mapMutations(["toggleLyrics"]),
+    ...mapMutations(['toggleLyrics']),
+    ...mapActions(['likeATrack']),
     getLyric() {
-      return getLyric(this.currentTrack.id).then((data) => {
+      if (!this.currentTrack.id) return;
+      return getLyric(this.currentTrack.id).then(data => {
         if (!data?.lrc?.lyric) {
           this.lyric = [];
           this.tlyric = [];
@@ -261,14 +324,14 @@ export default {
     formatTrackTime(value) {
       return formatTrackTime(value);
     },
-    setSeek() {
-      let value = this.$refs.progress.getValue();
-      this.$parent.$refs.player.setProgress(value);
-      this.$parent.$refs.player.player.seek(value);
-    },
-    seek(value) {
-      this.$parent.$refs.player.setProgress(value);
-      this.$parent.$refs.player.player.seek(value);
+    clickLyricLine(value, startPlay = false) {
+      // TODO: 双击选择还会选中文字，考虑搞个右键菜单复制歌词
+      if (window.getSelection().toString().length === 0) {
+        this.player.seek(value);
+      }
+      if (startPlay === true) {
+        this.player.play();
+      }
     },
     setLyricsInterval() {
       this.lyricsInterval = setInterval(() => {
@@ -284,8 +347,8 @@ export default {
           const el = document.getElementById(`line${this.highlightLyricIndex}`);
           if (el)
             el.scrollIntoView({
-              behavior: "smooth",
-              block: "center",
+              behavior: 'smooth',
+              block: 'center',
             });
         }
       }, 50);
@@ -295,21 +358,13 @@ export default {
         .showLyricsTranslation;
       if (showLyricsTranslation && line.contents[1]) {
         return `<span>${line.contents[0]}<br/>${line.contents[1]}</span>`;
-      } else {
+      } else if (line.contents[0] !== undefined) {
         return `<span>${line.contents[0]}</span>`;
       }
+      return 'unknown';
     },
-  },
-  watch: {
-    currentTrack() {
-      this.getLyric();
-    },
-    showLyrics(show) {
-      if (show) {
-        this.setLyricsInterval();
-      } else {
-        clearInterval(this.lyricsInterval);
-      }
+    moveToFMTrash() {
+      this.player.moveToFMTrash();
     },
   },
 };
@@ -327,6 +382,59 @@ export default {
   display: flex;
 }
 
+.lyrics-background {
+  --contrast-lyrics-background: 75%;
+  --brightness-lyrics-background: 150%;
+}
+
+[data-theme='dark'] .lyrics-background {
+  --contrast-lyrics-background: 125%;
+  --brightness-lyrics-background: 50%;
+}
+
+.lyrics-background {
+  filter: blur(50px) contrast(var(--contrast-lyrics-background))
+    brightness(var(--brightness-lyrics-background));
+  position: absolute;
+  height: 100vh;
+  width: 100vw;
+  .top-right,
+  .bottom-left {
+    z-index: 0;
+    width: 140vw;
+    height: 140vw;
+    opacity: 0.6;
+    position: absolute;
+    background-size: cover;
+  }
+
+  .top-right {
+    right: 0;
+    top: 0;
+    mix-blend-mode: luminosity;
+  }
+
+  .bottom-left {
+    left: 0;
+    bottom: 0;
+    animation-direction: reverse;
+    animation-delay: 10s;
+  }
+}
+
+.dynamic-background > div {
+  animation: rotate 150s linear infinite;
+}
+
+@keyframes rotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
 .left-side {
   flex: 1;
   display: flex;
@@ -335,10 +443,12 @@ export default {
   margin-top: 24px;
   align-items: center;
   transition: all 0.5s;
+
   .controls {
     max-width: 54vh;
     margin-top: 24px;
     color: var(--color-text);
+
     .title {
       margin-top: 8px;
       font-size: 1.4rem;
@@ -349,6 +459,7 @@ export default {
       -webkit-line-clamp: 1;
       overflow: hidden;
     }
+
     .subtitle {
       margin-top: 4px;
       font-size: 1rem;
@@ -362,63 +473,76 @@ export default {
     .top-part {
       display: flex;
       justify-content: space-between;
+
       .buttons {
         display: flex;
         align-items: center;
+
         button {
           margin: 0 0 0 4px;
         }
+
         .svg-icon {
-          opacity: 0.58;
           height: 18px;
           width: 18px;
         }
       }
     }
+
     .progress-bar {
       margin-top: 22px;
       display: flex;
       align-items: center;
       justify-content: space-between;
+
       .slider {
         width: 100%;
         flex-grow: grow;
         padding: 0 10px;
       }
+
       span {
         font-size: 15px;
         opacity: 0.58;
         min-width: 28px;
       }
     }
+
     .media-controls {
       display: flex;
       justify-content: center;
       margin-top: 18px;
       align-items: center;
+
       button {
         margin: 0;
       }
+
       .svg-icon {
         opacity: 0.38;
         height: 14px;
         width: 14px;
       }
+
       .active .svg-icon {
         opacity: 0.88;
       }
+
       .middle {
         padding: 0 16px;
         display: flex;
         align-items: center;
+
         button {
           margin: 0 8px;
         }
-        button:nth-child(2) .svg-icon {
+
+        button#play .svg-icon {
           height: 28px;
           width: 28px;
           padding: 2px;
         }
+
         .svg-icon {
           opacity: 0.88;
           height: 22px;
@@ -435,6 +559,7 @@ export default {
   .cover-container {
     position: relative;
   }
+
   img {
     border-radius: 0.75em;
     width: 54vh;
@@ -442,6 +567,7 @@ export default {
     user-select: none;
     object-fit: cover;
   }
+
   .shadow {
     position: absolute;
     top: 12px;
@@ -460,6 +586,7 @@ export default {
   font-weight: 600;
   color: var(--color-text);
   margin-right: 24px;
+
   .lyrics-container {
     height: 100%;
     display: flex;
@@ -468,30 +595,40 @@ export default {
     max-width: 460px;
     overflow-y: auto;
     transition: 0.5s;
+
     .line {
-      // margin-top: 38px;
       padding: 18px;
       transition: 0.2s;
       border-radius: 12px;
+
       &:hover {
         background: var(--color-secondary-bg);
       }
+
       span {
         opacity: 0.28;
         cursor: default;
       }
     }
+
+    .line#line-1:hover {
+      background: unset;
+    }
+
     .highlight span {
       opacity: 0.98;
       transition: 0.5s;
     }
   }
+
   ::-webkit-scrollbar {
     display: none;
   }
+
   .lyrics-container .line:first-child {
     margin-top: 50vh;
   }
+
   .lyrics-container .line:last-child {
     margin-bottom: calc(50vh - 128px);
   }
@@ -511,14 +648,16 @@ export default {
   opacity: 0.28;
   transition: 0.2s;
   -webkit-app-region: no-drag;
+
   .svg-icon {
     color: var(--color-text);
     padding-top: 5px;
     height: 22px;
     width: 22px;
   }
+
   &:hover {
-    background: var(--color-secondary-bg);
+    background: var(--color-secondary-bg-for-transparent);
     opacity: 0.88;
   }
 }
@@ -535,6 +674,7 @@ export default {
 .slide-up-leave-active {
   transition: all 0.4s;
 }
+
 .slide-up-enter, .slide-up-leave-to /* .fade-leave-active below version 2.1.8 */ {
   transform: translateY(100%);
 }
@@ -542,9 +682,11 @@ export default {
 .slide-fade-enter-active {
   transition: all 0.5s ease;
 }
+
 .slide-fade-leave-active {
   transition: all 0.5s cubic-bezier(0.2, 0.2, 0, 1);
 }
+
 .slide-fade-enter,
 .slide-fade-leave-to {
   transform: translateX(27vh);

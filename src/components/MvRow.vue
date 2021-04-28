@@ -1,6 +1,6 @@
 <template>
-  <div class="mv-row">
-    <div class="mv" v-for="mv in mvs" :key="getID(mv)">
+  <div class="mv-row" :class="{ 'without-padding': withoutPadding }">
+    <div v-for="mv in mvs" :key="getID(mv)" class="mv">
       <div
         class="cover"
         @mouseover="hoverVideoID = getID(mv)"
@@ -10,8 +10,8 @@
         <img :src="getUrl(mv)" />
         <transition name="fade">
           <div
-            class="shadow"
             v-show="hoverVideoID === getID(mv)"
+            class="shadow"
             :style="{ background: 'url(' + getUrl(mv) + ')' }"
           ></div>
         </transition>
@@ -28,13 +28,14 @@
 
 <script>
 export default {
-  name: "CoverVideo",
+  name: 'CoverVideo',
   props: {
     mvs: Array,
     subtitle: {
       type: String,
-      default: "artist",
+      default: 'artist',
     },
+    withoutPadding: { type: Boolean, default: false },
   },
   data() {
     return {
@@ -47,11 +48,11 @@ export default {
       if (this.$parent.player !== undefined) {
         query = { autoplay: this.$parent.player.playing };
       }
-      this.$router.push({ path: "/mv/" + id, query });
+      this.$router.push({ path: '/mv/' + id, query });
     },
     getUrl(mv) {
       let url = mv.imgurl16v9 ?? mv.cover ?? mv.coverUrl;
-      return url.replace(/^http:/, "https:") + "?param=464y260";
+      return url.replace(/^http:/, 'https:') + '?param=464y260';
     },
     getID(mv) {
       if (mv.id !== undefined) return mv.id;
@@ -62,8 +63,8 @@ export default {
       if (mv.title !== undefined) return mv.title;
     },
     getSubtitle(mv) {
-      if (this.subtitle === "artist") {
-        let artistName = "null";
+      if (this.subtitle === 'artist') {
+        let artistName = 'null';
         let artistID = 0;
         if (mv.artistName !== undefined) {
           artistName = mv.artistName;
@@ -73,7 +74,7 @@ export default {
           artistID = mv.creator[0].userId;
         }
         return `<a href="/#/artist/${artistID}">${artistName}</a>`;
-      } else if (this.subtitle === "publishTime") {
+      } else if (this.subtitle === 'publishTime') {
         return mv.publishTime;
       }
     },
@@ -83,9 +84,39 @@ export default {
 
 <style lang="scss" scoped>
 .mv-row {
+  --col-num: 5;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(var(--col-num), 1fr);
   gap: 36px 24px;
+  padding: var(--main-content-padding);
+}
+
+.mv-row.without-padding {
+  padding: 0;
+}
+
+@media (max-width: 900px) {
+  .mv-row {
+    --col-num: 4;
+  }
+}
+
+@media (max-width: 800px) {
+  .mv-row {
+    --col-num: 3;
+  }
+}
+
+@media (max-width: 700px) {
+  .mv-row {
+    --col-num: 2;
+  }
+}
+
+@media (max-width: 550px) {
+  .mv-row {
+    --col-num: 1;
+  }
 }
 
 .mv {
@@ -116,7 +147,6 @@ export default {
   transition: transform 0.3s;
   &:hover {
     cursor: pointer;
-    transform: scale(1.02);
   }
 }
 img {
