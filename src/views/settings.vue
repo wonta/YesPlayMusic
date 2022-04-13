@@ -1,5 +1,5 @@
 <template>
-  <div class="settings">
+  <div class="settings-page" @click="clickOutside">
     <div class="container">
       <div v-if="showUserInfo" class="user">
         <div class="left">
@@ -35,6 +35,7 @@
             <option value="en">🇬🇧 English</option>
             <option value="tr">🇹🇷 Türkçe</option>
             <option value="zh-CN">🇨🇳 简体中文</option>
+            <option value="zh-TW">繁體中文</option>
           </select>
         </div>
       </div>
@@ -51,6 +52,20 @@
             <option value="dark"
               >🌚 {{ $t('settings.appearance.dark') }}</option
             >
+          </select>
+        </div>
+      </div>
+      <div class="item">
+        <div class="left">
+          <div class="title"> 音乐语种偏好 </div>
+        </div>
+        <div class="right">
+          <select v-model="musicLanguage">
+            <option value="all">无偏好</option>
+            <option value="zh">华语</option>
+            <option value="ea">欧美</option>
+            <option value="jp">日语</option>
+            <option value="kr">韩语</option>
           </select>
         </div>
       </div>
@@ -95,7 +110,7 @@
         </div>
       </div>
 
-      <h3>缓存</h3>
+      <h3 v-if="isElectron">缓存</h3>
       <div v-if="isElectron" class="item">
         <div class="left">
           <div class="title">
@@ -127,6 +142,7 @@
             <option :value="1024"> 1GB </option>
             <option :value="2048"> 2GB </option>
             <option :value="4096"> 4GB </option>
+            <option :value="8192"> 8GB </option>
           </select>
         </div>
       </div>
@@ -177,6 +193,7 @@
             <option :value="true">
               {{ $t('settings.lyricsBackground.on') }}
             </option>
+            <option value="blur"> 模糊封面 </option>
             <option value="dynamic">
               {{ $t('settings.lyricsBackground.dynamic') }}
             </option>
@@ -205,6 +222,58 @@
         </div>
       </div>
 
+      <section v-if="isElectron" class="unm-configuration">
+        <h3>UnblockNeteaseMusic 设定</h3>
+        <div class="item">
+          <div class="left">
+            <div class="title"
+              >启用
+              <a
+                href="https://github.com/UnblockNeteaseMusic/server"
+                target="blank"
+                >UnblockNeteaseMusic</a
+              ></div
+            >
+          </div>
+          <div class="right">
+            <div class="toggle">
+              <input
+                id="enable-unblock-netease-music"
+                v-model="enableUnblockNeteaseMusic"
+                type="checkbox"
+                name="enable-unblock-netease-music"
+              />
+              <label for="enable-unblock-netease-music"></label>
+            </div>
+          </div>
+        </div>
+        <div class="item">
+          <div class="left">
+            <div class="title"> 备选音源 </div>
+            <div class="description">
+              音源的具体代号
+              <a
+                href="https://github.com/UnblockNeteaseMusic/server#音源清单"
+                target="_blank"
+              >
+                可以点此到 UNM 的说明页面查询 </a
+              ><br />
+              多个音源请用 <code>,</code> 逗号分隔。<br />
+              留空则使用 UNM 内置的默认值。
+            </div>
+          </div>
+          <div class="right">
+            <input
+              id="unm-source"
+              v-model="unmSource"
+              class="text-input"
+              placeholder="例 bilibili, kuwo"
+            />
+            <label for="unm-source"></label>
+          </div>
+        </div>
+      </section>
+
       <h3>第三方</h3>
       <div class="item">
         <div class="left">
@@ -221,29 +290,6 @@
             >断开连接
           </button>
           <button v-else @click="lastfmConnect()"> 授权连接 </button>
-        </div>
-      </div>
-      <div class="item">
-        <div class="left">
-          <div class="title"
-            >启用
-            <a
-              href="https://github.com/nondanee/UnblockNeteaseMusic"
-              target="blank"
-              >UnblockNeteaseMusic</a
-            ></div
-          >
-        </div>
-        <div class="right">
-          <div class="toggle">
-            <input
-              id="enable-unblock-netease-music"
-              v-model="enableUnblockNeteaseMusic"
-              type="checkbox"
-              name="enable-unblock-netease-music"
-            />
-            <label for="enable-unblock-netease-music"></label>
-          </div>
         </div>
       </div>
       <div v-if="isElectron" class="item">
@@ -268,22 +314,41 @@
       <h3>其他</h3>
       <div v-if="isElectron && !isMac" class="item">
         <div class="left">
-          <div class="title">{{ $t('settings.minimizeToTray') }}</div>
+          <div class="title"> {{ $t('settings.closeAppOption.text') }} </div>
+        </div>
+        <div class="right">
+          <select v-model="closeAppOption">
+            <option value="ask">
+              {{ $t('settings.closeAppOption.ask') }}
+            </option>
+            <option value="exit">
+              {{ $t('settings.closeAppOption.exit') }}
+            </option>
+            <option value="minimizeToTray">
+              {{ $t('settings.closeAppOption.minimizeToTray') }}
+            </option>
+          </select>
+        </div>
+      </div>
+
+      <div v-if="isElectron && isLinux" class="item">
+        <div class="left">
+          <div class="title"> {{ $t('settings.enableCustomTitlebar') }} </div>
         </div>
         <div class="right">
           <div class="toggle">
             <input
-              id="minimize-to-tray"
-              v-model="minimizeToTray"
+              id="enable-custom-titlebar"
+              v-model="enableCustomTitlebar"
               type="checkbox"
-              name="minimize-to-tray"
+              name="enable-custom-titlebar"
             />
-            <label for="minimize-to-tray"></label>
+            <label for="enable-custom-titlebar"></label>
           </div>
         </div>
       </div>
 
-      <div class="item">
+      <div v-if="isElectron" class="item">
         <div class="left">
           <div class="title"> {{ $t('settings.showLibraryDefault') }}</div>
         </div>
@@ -318,22 +383,41 @@
           </div>
         </div>
       </div>
-      <div v-if="isElectron" class="item">
+
+      <div class="item">
         <div class="left">
-          <div class="title"> {{ $t('settings.enableGlobalShortcut') }}</div>
+          <div class="title">{{ $t('settings.subTitleDefault') }}</div>
         </div>
         <div class="right">
           <div class="toggle">
             <input
-              id="enable-enable-global-shortcut"
-              v-model="enableGlobalShortcut"
+              id="sub-title-default"
+              v-model="subTitleDefault"
               type="checkbox"
-              name="enable-enable-global-shortcut"
+              name="sub-title-default"
             />
-            <label for="enable-enable-global-shortcut"></label>
+            <label for="sub-title-default"></label>
           </div>
         </div>
       </div>
+
+      <div class="item">
+        <div class="left">
+          <div class="title">{{ $t('settings.enableReversedMode') }}</div>
+        </div>
+        <div class="right">
+          <div class="toggle">
+            <input
+              id="enable-reversed-mode"
+              v-model="enableReversedMode"
+              type="checkbox"
+              name="enable-reversed-mode"
+            />
+            <label for="enable-reversed-mode"></label>
+          </div>
+        </div>
+      </div>
+
       <div class="item">
         <div class="left">
           <div class="title" style="transform: scaleX(-1)">🐈️ 🏳️‍🌈</div>
@@ -362,7 +446,7 @@
               <option value="noProxy"> 关闭代理 </option>
               <option value="HTTP"> HTTP 代理 </option>
               <option value="HTTPS"> HTTPS 代理 </option>
-              <option value="SOCKS"> SOCKS 代理 </option>
+              <!-- <option value="SOCKS"> SOCKS 代理 </option> -->
             </select>
           </div>
         </div>
@@ -382,6 +466,90 @@
             :disabled="proxyProtocol === 'noProxy'"
           />
           <button @click="sendProxyConfig">更新代理</button>
+        </div>
+      </div>
+
+      <div v-if="isElectron">
+        <h3>快捷键</h3>
+        <div class="item">
+          <div class="left">
+            <div class="title"> {{ $t('settings.enableGlobalShortcut') }}</div>
+          </div>
+          <div class="right">
+            <div class="toggle">
+              <input
+                id="enable-enable-global-shortcut"
+                v-model="enableGlobalShortcut"
+                type="checkbox"
+                name="enable-enable-global-shortcut"
+              />
+              <label for="enable-enable-global-shortcut"></label>
+            </div>
+          </div>
+        </div>
+        <div
+          id="shortcut-table"
+          :class="{ 'global-disabled': !enableGlobalShortcut }"
+          tabindex="0"
+          @keydown="handleShortcutKeydown"
+        >
+          <div class="row row-head">
+            <div class="col">功能</div>
+            <div class="col">快捷键</div>
+            <div class="col">全局快捷键</div>
+          </div>
+          <div
+            v-for="shortcut in settings.shortcuts"
+            :key="shortcut.id"
+            class="row"
+          >
+            <div class="col">{{ shortcut.name }}</div>
+            <div class="col">
+              <div
+                class="keyboard-input"
+                :class="{
+                  active:
+                    shortcutInput.id === shortcut.id &&
+                    shortcutInput.type === 'shortcut',
+                }"
+                @click.stop="readyToRecordShortcut(shortcut.id, 'shortcut')"
+              >
+                {{
+                  shortcutInput.id === shortcut.id &&
+                  shortcutInput.type === 'shortcut' &&
+                  recordedShortcutComputed !== ''
+                    ? formatShortcut(recordedShortcutComputed)
+                    : formatShortcut(shortcut.shortcut)
+                }}
+              </div>
+            </div>
+            <div class="col">
+              <div
+                class="keyboard-input"
+                :class="{
+                  active:
+                    shortcutInput.id === shortcut.id &&
+                    shortcutInput.type === 'globalShortcut' &&
+                    enableGlobalShortcut,
+                }"
+                @click.stop="
+                  readyToRecordShortcut(shortcut.id, 'globalShortcut')
+                "
+                >{{
+                  shortcutInput.id === shortcut.id &&
+                  shortcutInput.type === 'globalShortcut' &&
+                  recordedShortcutComputed !== ''
+                    ? formatShortcut(recordedShortcutComputed)
+                    : formatShortcut(shortcut.globalShortcut)
+                }}</div
+              >
+            </div>
+          </div>
+          <button
+            class="restore-default-shortcut"
+            @click="restoreDefaultShortcuts"
+            >恢复默认快捷键</button
+          >
         </div>
       </div>
 
@@ -409,6 +577,8 @@ const electron =
 const ipcRenderer =
   process.env.IS_ELECTRON === true ? electron.ipcRenderer : null;
 
+const validShortcutCodes = ['=', '-', '~', '[', ']', ';', "'", ',', '.', '/'];
+
 export default {
   name: 'Settings',
   data() {
@@ -423,6 +593,12 @@ export default {
           label: 'settings.permissionRequired',
         },
       ],
+      shortcutInput: {
+        id: '',
+        type: '',
+        recording: false,
+      },
+      recordedShortcut: [],
     };
   },
   computed: {
@@ -433,11 +609,59 @@ export default {
     isMac() {
       return /macintosh|mac os x/i.test(navigator.userAgent);
     },
+    isLinux() {
+      return process.platform === 'linux';
+    },
     version() {
       return pkg.version;
     },
     showUserInfo() {
       return isLooseLoggedIn() && this.data.user.nickname;
+    },
+    recordedShortcutComputed() {
+      let shortcut = [];
+      this.recordedShortcut.map(e => {
+        if (e.keyCode >= 65 && e.keyCode <= 90) {
+          // A-Z
+          shortcut.push(e.code.replace('Key', ''));
+        } else if (e.key === 'Meta') {
+          // ⌘ Command on macOS
+          shortcut.push('Command');
+        } else if (['Alt', 'Control', 'Shift'].includes(e.key)) {
+          shortcut.push(e.key);
+        } else if (e.keyCode >= 48 && e.keyCode <= 57) {
+          // 0-9
+          shortcut.push(e.code.replace('Digit', ''));
+        } else if (e.keyCode >= 112 && e.keyCode <= 123) {
+          // F1-F12
+          shortcut.push(e.code);
+        } else if (
+          ['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown'].includes(e.key)
+        ) {
+          // Arrows
+          shortcut.push(e.code.replace('Arrow', ''));
+        } else if (validShortcutCodes.includes(e.key)) {
+          shortcut.push(e.key);
+        }
+      });
+      const sortTable = {
+        Control: 1,
+        Shift: 2,
+        Alt: 3,
+        Command: 4,
+      };
+      shortcut = shortcut.sort((a, b) => {
+        if (!sortTable[a] || !sortTable[b]) return 0;
+        if (sortTable[a] - sortTable[b] <= -1) {
+          return -1;
+        } else if (sortTable[a] - sortTable[b] >= 1) {
+          return 1;
+        } else {
+          return 0;
+        }
+      });
+      shortcut = shortcut.join('+');
+      return shortcut;
     },
 
     lang: {
@@ -447,6 +671,17 @@ export default {
       set(lang) {
         this.$i18n.locale = lang;
         this.$store.commit('changeLang', lang);
+      },
+    },
+    musicLanguage: {
+      get() {
+        return this.settings.musicLanguage ?? 'all';
+      },
+      set(value) {
+        this.$store.commit('updateSettings', {
+          key: 'musicLanguage',
+          value,
+        });
       },
     },
     appearance: {
@@ -503,7 +738,8 @@ export default {
     },
     enableUnblockNeteaseMusic: {
       get() {
-        return this.settings.enableUnblockNeteaseMusic || true;
+        const value = this.settings.enableUnblockNeteaseMusic;
+        return value !== undefined ? value : true;
       },
       set(value) {
         this.$store.commit('updateSettings', {
@@ -573,13 +809,13 @@ export default {
         });
       },
     },
-    minimizeToTray: {
+    closeAppOption: {
       get() {
-        return this.settings.minimizeToTray;
+        return this.settings.closeAppOption;
       },
       set(value) {
         this.$store.commit('updateSettings', {
-          key: 'minimizeToTray',
+          key: 'closeAppOption',
           value,
         });
       },
@@ -593,6 +829,32 @@ export default {
           key: 'enableDiscordRichPresence',
           value,
         });
+      },
+    },
+    subTitleDefault: {
+      get() {
+        return this.settings.subTitleDefault;
+      },
+      set(value) {
+        this.$store.commit('updateSettings', {
+          key: 'subTitleDefault',
+          value,
+        });
+      },
+    },
+    enableReversedMode: {
+      get() {
+        if (this.settings.enableReversedMode === undefined) return false;
+        return this.settings.enableReversedMode;
+      },
+      set(value) {
+        this.$store.commit('updateSettings', {
+          key: 'enableReversedMode',
+          value,
+        });
+        if (value === false) {
+          this.$store.state.player.reversed = false;
+        }
       },
     },
     enableGlobalShortcut: {
@@ -668,6 +930,32 @@ export default {
         this.$store.commit('updateSettings', {
           key: 'proxyConfig',
           value: config,
+        });
+      },
+    },
+    unmSource: {
+      /**
+       * @returns {string}
+       */
+      get() {
+        return this.settings.unmSource || '';
+      },
+      /** @param {string?} value */
+      set(value) {
+        this.$store.commit('updateSettings', {
+          key: 'unmSource',
+          value: value.length ? value : null,
+        });
+      },
+    },
+    enableCustomTitlebar: {
+      get() {
+        return this.settings.linuxEnableCustomTitlebar;
+      },
+      set(value) {
+        this.$store.commit('updateSettings', {
+          key: 'linuxEnableCustomTitlebar',
+          value,
         });
       },
     },
@@ -755,14 +1043,92 @@ export default {
       }
       this.showToast('已更新代理设置');
     },
+    clickOutside() {
+      this.exitRecordShortcut();
+    },
+    formatShortcut(shortcut) {
+      shortcut = shortcut
+        .replaceAll('+', ' + ')
+        .replace('Up', '↑')
+        .replace('Down', '↓')
+        .replace('Right', '→')
+        .replace('Left', '←');
+      if (this.settings.lang === 'zh-CN') {
+        shortcut = shortcut.replace('Space', '空格');
+      } else if (this.settings.lang === 'zh-TW') {
+        shortcut = shortcut.replace('Space', '空白鍵');
+      }
+      if (process.platform === 'darwin') {
+        return shortcut
+          .replace('CommandOrControl', '⌘')
+          .replace('Command', '⌘')
+          .replace('Alt', '⌥')
+          .replace('Control', '⌃')
+          .replace('Shift', '⇧');
+      }
+      return shortcut.replace('CommandOrControl', 'Ctrl');
+    },
+    readyToRecordShortcut(id, type) {
+      if (type === 'globalShortcut' && this.enableGlobalShortcut === false) {
+        return;
+      }
+      this.shortcutInput = { id, type, recording: true };
+      this.recordedShortcut = [];
+      ipcRenderer.send('switchGlobalShortcutStatusTemporary', 'disable');
+    },
+    handleShortcutKeydown(e) {
+      if (this.shortcutInput.recording === false) return;
+      e.preventDefault();
+      if (this.recordedShortcut.find(s => s.keyCode === e.keyCode)) return;
+      this.recordedShortcut.push(e);
+      if (
+        (e.keyCode >= 65 && e.keyCode <= 90) || // A-Z
+        (e.keyCode >= 48 && e.keyCode <= 57) || // 0-9
+        (e.keyCode >= 112 && e.keyCode <= 123) || // F1-F12
+        ['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown'].includes(e.key) || // Arrows
+        validShortcutCodes.includes(e.key)
+      ) {
+        this.saveShortcut();
+      }
+    },
+    handleShortcutKeyup(e) {
+      if (this.recordedShortcut.find(s => s.keyCode === e.keyCode)) {
+        this.recordedShortcut = this.recordedShortcut.filter(
+          s => s.keyCode !== e.keyCode
+        );
+      }
+    },
+    saveShortcut() {
+      const { id, type } = this.shortcutInput;
+      const payload = {
+        id,
+        type,
+        shortcut: this.recordedShortcutComputed,
+      };
+      this.$store.commit('updateShortcut', payload);
+      ipcRenderer.send('updateShortcut', payload);
+      this.showToast('快捷键已保存');
+      this.recordedShortcut = [];
+    },
+    exitRecordShortcut() {
+      if (this.shortcutInput.recording === false) return;
+      this.shortcutInput = { id: '', type: '', recording: false };
+      this.recordedShortcut = [];
+      ipcRenderer.send('switchGlobalShortcutStatusTemporary', 'enable');
+    },
+    restoreDefaultShortcuts() {
+      this.$store.commit('restoreDefaultShortcuts');
+      ipcRenderer.send('restoreDefaultShortcuts');
+    },
   },
 };
 </script>
 
 <style lang="scss" scoped>
-.settings {
+.settings-page {
   display: flex;
   justify-content: center;
+  margin-top: 32px;
 }
 .container {
   margin-top: 24px;
@@ -869,6 +1235,12 @@ h3 {
     font-weight: 500;
     opacity: 0.78;
   }
+
+  .description {
+    font-size: 14px;
+    margin-top: 0.5em;
+    opacity: 0.7;
+  }
 }
 
 select {
@@ -928,6 +1300,59 @@ input[type='number'] {
   opacity: 0.47;
   button:hover {
     transform: unset;
+  }
+}
+
+#shortcut-table {
+  font-size: 14px;
+  /* border: 1px solid black; */
+  user-select: none;
+  color: var(--color-text);
+  .row {
+    display: flex;
+  }
+  .row.row-head {
+    opacity: 0.58;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .col {
+    min-width: 192px;
+    padding: 8px;
+    display: flex;
+    align-items: center;
+    /* border: 1px solid red; */
+    &:first-of-type {
+      padding-left: 0;
+      min-width: 128px;
+    }
+  }
+  .keyboard-input {
+    font-weight: 600;
+    background-color: var(--color-secondary-bg);
+    padding: 8px 12px 8px 12px;
+    border-radius: 0.5rem;
+    min-width: 146px;
+    min-height: 34px;
+    box-sizing: border-box;
+    &.active {
+      color: var(--color-primary);
+      background-color: var(--color-primary-bg);
+    }
+  }
+  .restore-default-shortcut {
+    margin-top: 12px;
+  }
+  &.global-disabled {
+    .row .col:last-child {
+      opacity: 0.48;
+    }
+    .row.row-head .col:last-child {
+      opacity: 1;
+    }
+  }
+  &:focus {
+    outline: none;
   }
 }
 

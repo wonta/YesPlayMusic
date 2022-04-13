@@ -12,6 +12,8 @@ updateApp();
 
 export default {
   showLyrics: false,
+  enableScrolling: true,
+  title: 'YesPlayMusic',
   liked: {
     songs: [],
     songsWithDetails: [], // 只有前12首
@@ -19,6 +21,7 @@ export default {
     albums: [],
     artists: [],
     mvs: [],
+    cloudDisk: [],
   },
   contextMenu: {
     clickObjectID: 0,

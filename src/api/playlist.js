@@ -47,10 +47,12 @@ export function getPlaylistDetail(id, noCache = false) {
     method: 'get',
     params,
   }).then(data => {
-    data.playlist.tracks = mapTrackPlayableStatus(
-      data.playlist.tracks,
-      data.privileges || []
-    );
+    if (data.playlist) {
+      data.playlist.tracks = mapTrackPlayableStatus(
+        data.playlist.tracks,
+        data.privileges || []
+      );
+    }
     return data;
   });
 }
@@ -194,7 +196,7 @@ export function addOrRemoveTrackFromPlaylist(params) {
 export function dailyRecommendTracks() {
   return request({
     url: '/recommend/songs',
-    method: 'post',
+    method: 'get',
     params: { timestamp: new Date().getTime() },
   }).then(result => {
     result.data.dailySongs = mapTrackPlayableStatus(
@@ -202,5 +204,23 @@ export function dailyRecommendTracks() {
       result.data.privileges
     );
     return result;
+  });
+}
+
+/**
+ * 心动模式/智能播放
+ * 说明 : 登录后调用此接口 , 可获取心动模式/智能播放列表 必选参数 : id : 歌曲 id
+ * - id : 歌曲 id
+ * - pid : 歌单 id
+ * - sid : 要开始播放的歌曲的 id (可选参数)
+ * @param {Object} params
+ * @param {number=} params.id
+ * @param {number=} params.pid
+ */
+export function intelligencePlaylist(params) {
+  return request({
+    url: '/playmode/intelligence/list',
+    method: 'get',
+    params,
   });
 }

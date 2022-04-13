@@ -1,24 +1,35 @@
 <template>
   <transition name="slide-up">
-    <div class="lyrics-page" :class="{ 'no-lyric': noLyric }">
+    <div
+      class="lyrics-page"
+      :class="{ 'no-lyric': noLyric }"
+      :data-theme="theme"
+    >
       <div
-        v-if="settings.lyricsBackground !== false"
-        :class="[
-          'lyrics-background',
-          { 'dynamic-background': settings.lyricsBackground === 'dynamic' },
-        ]"
+        v-if="
+          (settings.lyricsBackground === 'blur') |
+            (settings.lyricsBackground === 'dynamic')
+        "
+        class="lyrics-background"
+        :class="{
+          'dynamic-background': settings.lyricsBackground === 'dynamic',
+        }"
       >
         <div
-          v-show="showLyrics"
           class="top-right"
           :style="{ backgroundImage: `url(${bgImageUrl})` }"
         />
         <div
-          v-show="showLyrics"
           class="bottom-left"
           :style="{ backgroundImage: `url(${bgImageUrl})` }"
         />
       </div>
+      <div
+        v-if="settings.lyricsBackground === true"
+        class="gradient-background"
+        :style="{ background }"
+      ></div>
+
       <div class="left-side">
         <div>
           <div class="cover">
@@ -35,24 +46,34 @@
               <div class="track-info">
                 <div class="title" :title="currentTrack.name">
                   <router-link
-                    :to="`/${player.playlistSource.type}/${player.playlistSource.id}`"
+                    v-if="hasList()"
+                    :to="`${getListPath()}`"
                     @click.native="toggleLyrics"
                     >{{ currentTrack.name }}
                   </router-link>
+                  <span v-else>
+                    {{ currentTrack.name }}
+                  </span>
                 </div>
                 <div class="subtitle">
                   <router-link
+                    v-if="artist.id !== 0"
                     :to="`/artist/${artist.id}`"
                     @click.native="toggleLyrics"
                     >{{ artist.name }}
                   </router-link>
-                  -
-                  <router-link
-                    :to="`/album/${album.id}`"
-                    :title="album.name"
-                    @click.native="toggleLyrics"
-                    >{{ album.name }}
-                  </router-link>
+                  <span v-else>
+                    {{ artist.name }}
+                  </span>
+                  <span v-if="album.id !== 0">
+                    -
+                    <router-link
+                      :to="`/album/${album.id}`"
+                      :title="album.name"
+                      @click.native="toggleLyrics"
+                      >{{ album.name }}
+                    </router-link>
+                  </span>
                 </div>
               </div>
               <div class="buttons">
@@ -77,7 +98,7 @@
                 <vue-slider
                   v-model="player.progress"
                   :min="0"
-                  :max="player.currentTrackDuration + 1"
+                  :max="player.currentTrackDuration"
                   :interval="1"
                   :drag-on-click="true"
                   :duration="0"
@@ -85,6 +106,7 @@
                   :height="2"
                   :tooltip-formatter="formatTrackTime"
                   :lazy="true"
+                  :silent="true"
                 ></vue-slider>
               </div>
               <span>{{ formatTrackTime(player.currentTrackDuration) }}</span>
@@ -98,7 +120,7 @@
                     : $t('player.repeat')
                 "
                 :class="{ active: player.repeatMode !== 'off' }"
-                @click.native="player.switchRepeatMode"
+                @click.native="switchRepeatMode"
               >
                 <svg-icon
                   v-show="player.repeatMode !== 'one'"
@@ -113,27 +135,27 @@
                 <button-icon
                   v-show="!player.isPersonalFM"
                   :title="$t('player.previous')"
-                  @click.native="player.playPrevTrack"
+                  @click.native="playPrevTrack"
                 >
                   <svg-icon icon-class="previous" />
                 </button-icon>
                 <button-icon
                   v-show="player.isPersonalFM"
                   title="不喜欢"
-                  @click.native="player.moveToFMTrash"
+                  @click.native="moveToFMTrash"
                 >
                   <svg-icon icon-class="thumbs-down" />
                 </button-icon>
                 <button-icon
                   id="play"
                   :title="$t(player.playing ? 'player.pause' : 'player.play')"
-                  @click.native="player.playOrPause"
+                  @click.native="playOrPause"
                 >
                   <svg-icon :icon-class="player.playing ? 'pause' : 'play'" />
                 </button-icon>
                 <button-icon
                   :title="$t('player.next')"
-                  @click.native="player.playNextTrack"
+                  @click.native="playNextTrack"
                 >
                   <svg-icon icon-class="next" />
                 </button-icon>
@@ -142,7 +164,7 @@
                 v-show="!player.isPersonalFM"
                 :title="$t('player.shuffle')"
                 :class="{ active: player.shuffle }"
-                @click.native="player.switchShuffle"
+                @click.native="switchShuffle"
               >
                 <svg-icon icon-class="shuffle" />
               </button-icon>
@@ -169,8 +191,18 @@
               }"
               @click="clickLyricLine(line.time)"
               @dblclick="clickLyricLine(line.time, true)"
-              ><span v-html="formatLine(line)"></span
-            ></div>
+            >
+              <span v-if="line.contents[0]">{{ line.contents[0] }}</span>
+              <br />
+              <span
+                v-if="
+                  line.contents[1] &&
+                  $store.state.settings.showLyricsTranslation
+                "
+                class="translation"
+                >{{ line.contents[1] }}</span
+              >
+            </div>
           </div>
         </transition>
       </div>
@@ -192,8 +224,10 @@ import VueSlider from 'vue-slider-component';
 import { formatTrackTime } from '@/utils/common';
 import { getLyric } from '@/api/track';
 import { lyricParser } from '@/utils/lyrics';
-import { disableScrolling, enableScrolling } from '@/utils/ui';
 import ButtonIcon from '@/components/ButtonIcon.vue';
+import * as Vibrant from 'node-vibrant';
+import Color from 'color';
+import { hasListSource, getListSourcePath } from '@/utils/playList';
 
 export default {
   name: 'Lyrics',
@@ -208,6 +242,7 @@ export default {
       tlyric: [],
       highlightLyricIndex: -1,
       minimize: true,
+      background: '',
     };
   },
   computed: {
@@ -219,18 +254,7 @@ export default {
       return this.player.currentTrack?.al?.picUrl + '?param=1024y1024';
     },
     bgImageUrl() {
-      return this.player.currentTrack?.al?.picUrl + '?param=500y500';
-    },
-    progress: {
-      get() {
-        return this.playerRef.progress;
-      },
-      set(value) {
-        this.playerRef.setProgress(value);
-      },
-    },
-    progressMax() {
-      return this.playerRef.progressMax;
+      return this.player.currentTrack?.al?.picUrl + '?param=512y512';
     },
     lyricWithTranslation() {
       let ret = [];
@@ -268,9 +292,6 @@ export default {
         fontSize: `${this.$store.state.settings.lyricFontSize || 28}px`,
       };
     },
-    playerRef() {
-      return this.$parent.$refs.player ? this.$parent.$refs.player : {};
-    },
     noLyric() {
       return this.lyric.length == 0;
     },
@@ -282,23 +303,28 @@ export default {
     album() {
       return this.currentTrack?.al || { id: 0, name: 'unknown' };
     },
+    theme() {
+      return this.settings.lyricsBackground === true ? 'dark' : 'auto';
+    },
   },
   watch: {
     currentTrack() {
       this.getLyric();
+      this.getCoverColor();
     },
     showLyrics(show) {
       if (show) {
         this.setLyricsInterval();
-        disableScrolling();
+        this.$store.commit('enableScrolling', false);
       } else {
         clearInterval(this.lyricsInterval);
-        enableScrolling();
+        this.$store.commit('enableScrolling', true);
       }
     },
   },
   created() {
     this.getLyric();
+    this.getCoverColor();
   },
   destroyed() {
     clearInterval(this.lyricsInterval);
@@ -306,6 +332,19 @@ export default {
   methods: {
     ...mapMutations(['toggleLyrics']),
     ...mapActions(['likeATrack']),
+    playPrevTrack() {
+      this.player.playPrevTrack();
+    },
+    playOrPause() {
+      this.player.playOrPause();
+    },
+    playNextTrack() {
+      if (this.player.isPersonalFM) {
+        this.player.playNextFMTrack();
+      } else {
+        this.player.playNextTrack();
+      }
+    },
     getLyric() {
       if (!this.currentTrack.id) return;
       return getLyric(this.currentTrack.id).then(data => {
@@ -315,9 +354,31 @@ export default {
           return false;
         } else {
           let { lyric, tlyric } = lyricParser(data);
-          this.lyric = lyric;
-          this.tlyric = tlyric;
-          return true;
+          lyric = lyric.filter(
+            l => !/^作(词|曲)\s*(:|：)\s*无$/.exec(l.content)
+          );
+          let includeAM =
+            lyric.length <= 10 &&
+            lyric.map(l => l.content).includes('纯音乐，请欣赏');
+          if (includeAM) {
+            let reg = /^作(词|曲)\s*(:|：)\s*/;
+            let author = this.currentTrack?.ar[0]?.name;
+            lyric = lyric.filter(l => {
+              let regExpArr = l.content.match(reg);
+              return (
+                !regExpArr || l.content.replace(regExpArr[0], '') !== author
+              );
+            });
+          }
+          if (lyric.length === 1 && includeAM) {
+            this.lyric = [];
+            this.tlyric = [];
+            return false;
+          } else {
+            this.lyric = lyric;
+            this.tlyric = tlyric;
+            return true;
+          }
         }
       });
     },
@@ -326,7 +387,13 @@ export default {
     },
     clickLyricLine(value, startPlay = false) {
       // TODO: 双击选择还会选中文字，考虑搞个右键菜单复制歌词
-      if (window.getSelection().toString().length === 0) {
+      let jumpFlag = false;
+      this.lyric.filter(function (item) {
+        if (item.content == '纯音乐，请欣赏') {
+          jumpFlag = true;
+        }
+      });
+      if (window.getSelection().toString().length === 0 && !jumpFlag) {
         this.player.seek(value);
       }
       if (startPlay === true) {
@@ -353,18 +420,32 @@ export default {
         }
       }, 50);
     },
-    formatLine(line) {
-      const showLyricsTranslation = this.$store.state.settings
-        .showLyricsTranslation;
-      if (showLyricsTranslation && line.contents[1]) {
-        return `<span>${line.contents[0]}<br/>${line.contents[1]}</span>`;
-      } else if (line.contents[0] !== undefined) {
-        return `<span>${line.contents[0]}</span>`;
-      }
-      return 'unknown';
-    },
     moveToFMTrash() {
       this.player.moveToFMTrash();
+    },
+    switchRepeatMode() {
+      this.player.switchRepeatMode();
+    },
+    switchShuffle() {
+      this.player.switchShuffle();
+    },
+    getCoverColor() {
+      if (this.settings.lyricsBackground !== true) return;
+      const cover = this.currentTrack.al?.picUrl + '?param=1024y1024';
+      Vibrant.from(cover, { colorCount: 1 })
+        .getPalette()
+        .then(palette => {
+          const orignColor = Color.rgb(palette.DarkMuted._rgb);
+          const color = orignColor.darken(0.1).rgb().string();
+          const color2 = orignColor.lighten(0.28).rotate(-30).rgb().string();
+          this.background = `linear-gradient(to top left, ${color}, ${color2})`;
+        });
+    },
+    hasList() {
+      return hasListSource();
+    },
+    getListPath() {
+      return getListSourcePath();
     },
   },
 };
@@ -380,6 +461,7 @@ export default {
   z-index: 200;
   background: var(--color-body-bg);
   display: flex;
+  clip: rect(auto, auto, auto, auto);
 }
 
 .lyrics-background {
@@ -435,6 +517,12 @@ export default {
   }
 }
 
+.gradient-background {
+  position: absolute;
+  height: 100vh;
+  width: 100vw;
+}
+
 .left-side {
   flex: 1;
   display: flex;
@@ -443,6 +531,8 @@ export default {
   margin-top: 24px;
   align-items: center;
   transition: all 0.5s;
+
+  z-index: 1;
 
   .controls {
     max-width: 54vh;
@@ -586,6 +676,7 @@ export default {
   font-weight: 600;
   color: var(--color-text);
   margin-right: 24px;
+  z-index: 0;
 
   .lyrics-container {
     height: 100%;
@@ -595,19 +686,31 @@ export default {
     max-width: 460px;
     overflow-y: auto;
     transition: 0.5s;
+    scrollbar-width: none; // firefox
 
     .line {
-      padding: 18px;
-      transition: 0.2s;
+      margin: 2px 0;
+      padding: 12px 18px;
+      transition: 0.5s;
       border-radius: 12px;
 
       &:hover {
-        background: var(--color-secondary-bg);
+        background: var(--color-secondary-bg-for-transparent);
+      }
+      &:active {
+        transform: scale(0.95);
       }
 
       span {
         opacity: 0.28;
         cursor: default;
+        font-size: 1em;
+        transition: all 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+      }
+
+      span.translation {
+        opacity: 0.2;
+        font-size: 0.95em;
       }
     }
 
@@ -615,9 +718,19 @@ export default {
       background: unset;
     }
 
+    .translation {
+      margin-top: 0.1em;
+    }
+
     .highlight span {
       opacity: 0.98;
-      transition: 0.5s;
+      display: inline-block;
+      font-size: 1.25em;
+    }
+
+    .highlight span.translation {
+      opacity: 0.65;
+      font-size: 1.1em;
     }
   }
 
@@ -667,6 +780,21 @@ export default {
     transition: all 0.5s;
     transform: translateX(27vh);
     margin-right: 0;
+  }
+}
+
+@media (max-aspect-ratio: 10/9) {
+  .left-side {
+    display: none;
+  }
+  .right-side .lyrics-container {
+    max-width: 100%;
+  }
+}
+
+@media screen and (min-width: 1200px) {
+  .right-side .lyrics-container {
+    max-width: 600px;
   }
 }
 

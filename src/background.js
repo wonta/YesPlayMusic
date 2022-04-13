@@ -7,7 +7,16 @@ import {
   dialog,
   globalShortcut,
   nativeTheme,
+  screen,
 } from 'electron';
+import {
+  isWindows,
+  isMac,
+  isLinux,
+  isDevelopment,
+  isCreateTray,
+  isCreateMpris,
+} from '@/utils/platform';
 import { createProtocol } from 'vue-cli-plugin-electron-builder/lib';
 import { startNeteaseMusicApi } from './electron/services';
 import { initIpcMain } from './electron/ipcMain.js';
@@ -18,14 +27,63 @@ import { createDockMenu } from './electron/dockMenu';
 import { registerGlobalShortcut } from './electron/globalShortcut';
 import { autoUpdater } from 'electron-updater';
 import installExtension, { VUEJS_DEVTOOLS } from 'electron-devtools-installer';
+import { EventEmitter } from 'events';
 import express from 'express';
 import expressProxy from 'express-http-proxy';
 import Store from 'electron-store';
+import { createMpris } from '@/electron/mpris';
+const clc = require('cli-color');
+const log = text => {
+  console.log(`${clc.blueBright('[background.js]')} ${text}`);
+};
+
+const closeOnLinux = (e, win, store) => {
+  let closeOpt = store.get('settings.closeAppOption');
+  if (closeOpt !== 'exit') {
+    e.preventDefault();
+  }
+
+  if (closeOpt === 'ask') {
+    dialog
+      .showMessageBox({
+        type: 'info',
+        title: 'Information',
+        cancelId: 2,
+        defaultId: 0,
+        message: '确定要关闭吗？',
+        buttons: ['最小化到托盘', '直接退出'],
+        checkboxLabel: '记住我的选择',
+      })
+      .then(result => {
+        if (result.checkboxChecked && result.response !== 2) {
+          win.webContents.send(
+            'rememberCloseAppOption',
+            result.response === 0 ? 'minimizeToTray' : 'exit'
+          );
+        }
+
+        if (result.response === 0) {
+          win.hide(); //调用 最小化实例方法
+        } else if (result.response === 1) {
+          win = null;
+          app.exit(); //exit()直接关闭客户端，不会执行quit();
+        }
+      })
+      .catch(err => {
+        log(err);
+      });
+  } else if (closeOpt === 'exit') {
+    win = null;
+    app.quit();
+  } else {
+    win.hide();
+  }
+};
 
 class Background {
   constructor() {
     this.window = null;
-    this.tray = null;
+    this.ypmTrayImpl = null;
     this.store = new Store({
       windowWidth: {
         width: { type: 'number', default: 1440 },
@@ -34,13 +92,13 @@ class Background {
     });
     this.neteaseMusicAPI = null;
     this.expressApp = null;
-    this.willQuitApp = process.platform === 'darwin' ? false : true;
+    this.willQuitApp = !isMac;
 
     this.init();
   }
 
   init() {
-    console.log('initializing');
+    log('initializing');
 
     // Make sure the app is singleton.
     if (!app.requestSingleInstanceLock()) return app.quit();
@@ -58,6 +116,14 @@ class Background {
 
     // handle app events
     this.handleAppEvents();
+
+    // disable chromium mpris
+    if (isCreateMpris) {
+      app.commandLine.appendSwitch(
+        'disable-features',
+        'HardwareMediaKeyHandling,MediaSessionService'
+      );
+    }
   }
 
   async initDevtools() {
@@ -69,7 +135,7 @@ class Background {
     }
 
     // Exit cleanly on request from parent process in development mode.
-    if (process.platform === 'win32') {
+    if (isWindows) {
       process.on('message', data => {
         if (data === 'graceful-exit') {
           app.quit();
@@ -83,30 +149,44 @@ class Background {
   }
 
   createExpressApp() {
-    console.log('creating express app');
+    log('creating express app');
 
     const expressApp = express();
     expressApp.use('/', express.static(__dirname + '/'));
     expressApp.use('/api', expressProxy('http://127.0.0.1:10754'));
     expressApp.use('/player', (req, res) => {
-      res.send(this.store.get('playerInfo'));
+      this.window.webContents
+        .executeJavaScript('window.yesplaymusic.player')
+        .then(result => {
+          res.send({
+            currentTrack: result._isPersonalFM
+              ? result._personalFMTrack
+              : result._currentTrack,
+            progress: result._progress,
+          });
+        });
     });
-    this.expressApp = expressApp.listen(27232);
+    this.expressApp = expressApp.listen(27232, '127.0.0.1');
   }
 
   createWindow() {
-    console.log('creating app window');
+    log('creating app window');
 
     const appearance = this.store.get('settings.appearance');
+    const showLibraryDefault = this.store.get('settings.showLibraryDefault');
 
-    this.window = new BrowserWindow({
+    const options = {
       width: this.store.get('window.width') || 1440,
       height: this.store.get('window.height') || 840,
       minWidth: 1080,
       minHeight: 720,
       titleBarStyle: 'hiddenInset',
-      frame: process.platform !== 'win32',
+      frame: !(
+        isWindows ||
+        (isLinux && this.store.get('settings.linuxEnableCustomTitlebar'))
+      ),
       title: 'YesPlayMusic',
+      show: false,
       webPreferences: {
         webSecurity: false,
         nodeIntegration: true,
@@ -119,22 +199,73 @@ class Background {
         appearance === 'dark'
           ? '#222'
           : '#fff',
-    });
+    };
+
+    if (this.store.get('window.x') && this.store.get('window.y')) {
+      let x = this.store.get('window.x');
+      let y = this.store.get('window.y');
+
+      let displays = screen.getAllDisplays();
+      let isResetWindiw = false;
+      if (displays.length === 1) {
+        let { bounds } = displays[0];
+        if (
+          x < bounds.x ||
+          x > bounds.x + bounds.width - 50 ||
+          y < bounds.y ||
+          y > bounds.y + bounds.height - 50
+        ) {
+          isResetWindiw = true;
+        }
+      } else {
+        isResetWindiw = true;
+        for (let i = 0; i < displays.length; i++) {
+          let { bounds } = displays[i];
+          if (
+            x > bounds.x &&
+            x < bounds.x + bounds.width &&
+            y > bounds.y &&
+            y < bounds.y - bounds.height
+          ) {
+            // 检测到APP窗口当前处于一个可用的屏幕里，break
+            isResetWindiw = false;
+            break;
+          }
+        }
+      }
+
+      if (!isResetWindiw) {
+        options.x = x;
+        options.y = y;
+      }
+    }
+
+    this.window = new BrowserWindow(options);
 
     // hide menu bar on Microsoft Windows and Linux
     this.window.setMenuBarVisibility(false);
 
     if (process.env.WEBPACK_DEV_SERVER_URL) {
       // Load the url of the dev server if in development mode
-      this.window.loadURL(process.env.WEBPACK_DEV_SERVER_URL);
+      this.window.loadURL(
+        showLibraryDefault
+          ? `${process.env.WEBPACK_DEV_SERVER_URL}/#/library`
+          : process.env.WEBPACK_DEV_SERVER_URL
+      );
       if (!process.env.IS_TEST) this.window.webContents.openDevTools();
     } else {
       createProtocol('app');
-      this.window.loadURL('http://localhost:27232');
+      this.window.loadURL(
+        showLibraryDefault
+          ? 'http://localhost:27232/#/library'
+          : 'http://localhost:27232'
+      );
     }
   }
 
   checkForUpdates() {
+    if (isDevelopment) return;
+    log('checkForUpdates');
     autoUpdater.checkForUpdatesAndNotify();
 
     const showNewVersionMessage = info => {
@@ -163,40 +294,47 @@ class Background {
 
   handleWindowEvents() {
     this.window.once('ready-to-show', () => {
-      console.log('windows ready-to-show event');
+      log('window ready-to-show event');
       this.window.show();
+      this.store.set('window', this.window.getBounds());
     });
 
     this.window.on('close', e => {
-      console.log('windows close event');
-      if (this.willQuitApp) {
-        /* the user tried to quit the app */
-        this.window = null;
-        app.quit();
+      log('window close event');
+
+      if (isLinux) {
+        closeOnLinux(e, this.window, this.store);
+      } else if (isMac) {
+        if (this.willQuitApp) {
+          this.window = null;
+          app.quit();
+        } else {
+          e.preventDefault();
+          this.window.hide();
+        }
       } else {
-        /* the user only tried to close the window */
-        e.preventDefault();
-        this.window.hide();
+        let closeOpt = this.store.get('settings.closeAppOption');
+        if (this.willQuitApp && (closeOpt === 'exit' || closeOpt === 'ask')) {
+          this.window = null;
+          app.quit();
+        } else {
+          e.preventDefault();
+          this.window.hide();
+        }
       }
     });
 
-    this.window.on('resize', () => {
-      let { height, width } = this.window.getBounds();
-      this.store.set('window', { height, width });
+    this.window.on('resized', () => {
+      this.store.set('window', this.window.getBounds());
     });
 
-    this.window.on('minimize', () => {
-      if (
-        ['win32', 'linux'].includes(process.platform) &&
-        this.store.get('settings.minimizeToTray')
-      ) {
-        this.window.hide();
-      }
+    this.window.on('moved', () => {
+      this.store.set('window', this.window.getBounds());
     });
 
     this.window.webContents.on('new-window', function (e, url) {
       e.preventDefault();
-      console.log('open url');
+      log('open url');
       const excludeHosts = ['www.last.fm'];
       const exclude = excludeHosts.find(host => url.includes(host));
       if (exclude) {
@@ -224,47 +362,66 @@ class Background {
       // This method will be called when Electron has finished
       // initialization and is ready to create browser windows.
       // Some APIs can only be used after this event occurs.
-      console.log('app ready event');
+      log('app ready event');
 
       // for development
-      if (process.env.NODE_ENV !== 'production') {
+      if (isDevelopment) {
         this.initDevtools();
       }
 
       // create window
       this.createWindow();
+      this.window.once('ready-to-show', () => {
+        this.window.show();
+      });
       this.handleWindowEvents();
 
+      // create tray
+      if (isCreateTray) {
+        this.trayEventEmitter = new EventEmitter();
+        this.ypmTrayImpl = createTray(this.window, this.trayEventEmitter);
+      }
+
       // init ipcMain
-      initIpcMain(this.window, this.store);
+      initIpcMain(this.window, this.store, this.trayEventEmitter);
+
+      // set proxy
+      const proxyRules = this.store.get('proxy');
+      if (proxyRules) {
+        this.window.webContents.session.setProxy({ proxyRules }, result => {
+          log('finished setProxy', result);
+        });
+      }
 
       // check for updates
       this.checkForUpdates();
 
       // create menu
-      createMenu(this.window);
-
-      // create tray
-      if (['win32', 'linux'].includes(process.platform)) {
-        this.tray = createTray(this.window);
-      }
+      createMenu(this.window, this.store);
 
       // create dock menu for macOS
-      app.dock.setMenu(createDockMenu(this.window));
+      const createdDockMenu = createDockMenu(this.window);
+      if (createDockMenu && app.dock) app.dock.setMenu(createdDockMenu);
 
       // create touch bar
-      this.window.setTouchBar(createTouchBar(this.window));
+      const createdTouchBar = createTouchBar(this.window);
+      if (createdTouchBar) this.window.setTouchBar(createdTouchBar);
 
       // register global shortcuts
-      if (this.store.get('settings.enableGlobalShortcut')) {
-        registerGlobalShortcut(this.window);
+      if (this.store.get('settings.enableGlobalShortcut') !== false) {
+        registerGlobalShortcut(this.window, this.store);
+      }
+
+      // create mpris
+      if (isCreateMpris) {
+        createMpris(this.window);
       }
     });
 
     app.on('activate', () => {
       // On macOS it's common to re-create a window in the app when the
       // dock icon is clicked and there are no other windows open.
-      console.log('app activate event');
+      log('app activate event');
       if (this.window === null) {
         this.createWindow();
       } else {
@@ -273,7 +430,7 @@ class Background {
     });
 
     app.on('window-all-closed', () => {
-      if (process.platform !== 'darwin') {
+      if (!isMac) {
         app.quit();
       }
     });
@@ -290,6 +447,18 @@ class Background {
       // unregister all global shortcuts
       globalShortcut.unregisterAll();
     });
+
+    if (!isMac) {
+      app.on('second-instance', (e, cl, wd) => {
+        if (this.window) {
+          this.window.show();
+          if (this.window.isMinimized()) {
+            this.window.restore();
+          }
+          this.window.focus();
+        }
+      });
+    }
   }
 }
 

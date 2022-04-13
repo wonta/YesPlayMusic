@@ -39,11 +39,16 @@ export default {
       type: Boolean,
       default: false,
     },
+    minWidth: {
+      type: String,
+      default: 'calc(min(23rem, 100vw))',
+    },
   },
   computed: {
     modalStyles() {
       return {
         width: this.width,
+        minWidth: this.minWidth,
       };
     },
   },
@@ -68,6 +73,7 @@ export default {
   display: flex;
   justify-content: center;
   align-items: center;
+  z-index: 1000;
 }
 
 .modal {
