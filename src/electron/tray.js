@@ -1,6 +1,6 @@
 /* global __static */
 import path from 'path';
-import { app, nativeImage, Tray, Menu } from 'electron';
+import { app, nativeImage, Tray, Menu, nativeTheme } from 'electron';
 import { isLinux } from '@/utils/platform';
 
 function createMenuTemplate(win) {
@@ -97,11 +97,16 @@ function createMenuTemplate(win) {
 // click在默认行为下会弹出一个contextMenu，里面的唯一选项才会调用click事件
 // setContextMenu应该是目前唯一能在linux下使用托盘菜单api
 // 但是无法区分鼠标左右键
+
+// 发现openSUSE KDE环境可以区分鼠标左右键
+// 添加左键支持
+// 2022.05.17
 class YPMTrayLinuxImpl {
-  constructor(tray, win, emitter) {
+  constructor(tray, win, emitter, store) {
     this.tray = tray;
     this.win = win;
     this.emitter = emitter;
+    this.store = store;
     this.template = undefined;
     this.initTemplate();
     this.contextMenu = Menu.buildFromTemplate(this.template);
@@ -127,6 +132,10 @@ class YPMTrayLinuxImpl {
   }
 
   handleEvents() {
+    this.tray.on('click', () => {
+      this.win.show();
+    });
+
     this.emitter.on('updateTooltip', title => this.tray.setToolTip(title));
     this.emitter.on('updatePlayState', isPlaying => {
       this.contextMenu.getMenuItemById('play').visible = !isPlaying;
@@ -138,14 +147,37 @@ class YPMTrayLinuxImpl {
       this.contextMenu.getMenuItemById('unlike').visible = isLiked;
       this.tray.setContextMenu(this.contextMenu);
     });
+    this.emitter.on('updateIcon', () => {
+      this.updateIcon();
+    });
+  }
+
+  updateIcon() {
+    let trayIconSetting = this.store.get('settings.trayIconTheme') || 'auto';
+    let iconTheme;
+    if (trayIconSetting === 'auto') {
+      iconTheme = nativeTheme.shouldUseDarkColors ? 'light' : 'dark';
+    } else {
+      iconTheme = trayIconSetting;
+    }
+
+    let icon = nativeImage
+      .createFromPath(path.join(__static, `img/icons/menu-${iconTheme}@88.png`))
+      .resize({
+        height: 20,
+        width: 20,
+      });
+
+    this.tray.setImage(icon);
   }
 }
 
 class YPMTrayWindowsImpl {
-  constructor(tray, win, emitter) {
+  constructor(tray, win, emitter, store) {
     this.tray = tray;
     this.win = win;
     this.emitter = emitter;
+    this.store = store;
     this.template = createMenuTemplate(win);
     this.contextMenu = Menu.buildFromTemplate(this.template);
 
@@ -185,12 +217,42 @@ class YPMTrayWindowsImpl {
       isPlaying => (this.isPlaying = isPlaying)
     );
     this.emitter.on('updateLikeState', isLiked => (this.isLiked = isLiked));
+    this.emitter.on('updateIcon', () => {
+      this.updateIcon();
+    });
+  }
+
+  updateIcon() {
+    let trayIconSetting = this.store.get('settings.trayIconTheme') || 'auto';
+    let iconTheme;
+    if (trayIconSetting === 'auto') {
+      iconTheme = nativeTheme.shouldUseDarkColors ? 'light' : 'dark';
+    } else {
+      iconTheme = trayIconSetting;
+    }
+
+    let icon = nativeImage
+      .createFromPath(path.join(__static, `img/icons/menu-${iconTheme}@88.png`))
+      .resize({
+        height: 20,
+        width: 20,
+      });
+
+    this.tray.setImage(icon);
   }
 }
 
-export function createTray(win, eventEmitter) {
+export function createTray(win, eventEmitter, store) {
+  let trayIconSetting = store.get('settings.trayIconTheme') || 'auto';
+  let iconTheme;
+  if (trayIconSetting === 'auto') {
+    iconTheme = nativeTheme.shouldUseDarkColors ? 'light' : 'dark';
+  } else {
+    iconTheme = trayIconSetting;
+  }
+
   let icon = nativeImage
-    .createFromPath(path.join(__static, 'img/icons/menu@88.png'))
+    .createFromPath(path.join(__static, `img/icons/menu-${iconTheme}@88.png`))
     .resize({
       height: 20,
       width: 20,
@@ -200,6 +262,6 @@ export function createTray(win, eventEmitter) {
   tray.setToolTip('YesPlayMusic');
 
   return isLinux
-    ? new YPMTrayLinuxImpl(tray, win, eventEmitter)
-    : new YPMTrayWindowsImpl(tray, win, eventEmitter);
+    ? new YPMTrayLinuxImpl(tray, win, eventEmitter, store)
+    : new YPMTrayWindowsImpl(tray, win, eventEmitter, store);
 }

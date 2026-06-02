@@ -98,6 +98,7 @@ export default {
   },
   player: {
     like: 'Beğen',
+    unlike: 'Aksine',
     previous: 'Önceki Müzik',
     next: 'Sonraki Müzik',
     repeat: 'Tekrarla',
@@ -107,6 +108,8 @@ export default {
     pause: 'Durdur',
     mute: 'Sesi kapat',
     nextUp: 'Sıradaki',
+    translationLyric: 'şarkı sözleri (çeviri)',
+    PronunciationLyric: 'şarkı sözleri (çeviri)',
   },
   modal: {
     close: 'Kapat',
@@ -124,6 +127,17 @@ export default {
     settings: 'Ayarlar',
     logout: 'ÇIKIŞ YAP',
     language: 'Diller',
+    lyric: 'Şarkı Sözleri',
+    others: 'Diğerleri',
+    customization: 'Özelleştirme',
+    MusicGenrePreference: {
+      text: 'Müzik Dili Tercihi',
+      none: 'Tercih yok',
+      mandarin: 'Çince dili',
+      western: 'Avrupa ve Amerika',
+      korean: 'Korece',
+      japanese: 'Japonca',
+    },
     musicQuality: {
       text: 'Müzik Kalitesi',
       low: 'Düşük',
@@ -150,6 +164,12 @@ export default {
       light: 'Aydınlık',
       dark: 'Karanlık',
     },
+    trayIcon: {
+      text: 'Tepsi Simgesi Rengi',
+      auto: 'Otomatik',
+      light: 'Aydınlık',
+      dark: 'Karanlık',
+    },
     automaticallyCacheSongs: 'Müzikleri otomatik çerezle',
     clearSongsCache: 'Müzik çerezlerini temizle',
     cacheCount: 'Çerezlenen {song} Müzikler ({size})',
@@ -172,6 +192,34 @@ export default {
       exit: 'Exit',
       minimizeToTray: 'Küçült',
     },
+    unm: {
+      enable: 'Enable',
+      audioSource: {
+        title: 'Audio Sources',
+      },
+      enableFlac: {
+        title: 'Enable FLAC Sources',
+        desc: 'To take effect, it may be required to clear the cache after enabling this function.',
+      },
+      searchMode: {
+        title: 'Audio Search Mode',
+        fast: 'Speed Priority',
+        order: 'Order Priority',
+      },
+      cookie: {
+        joox: 'Cookie for Joox use',
+        qq: 'Cookie for QQ use',
+        desc1: 'Click here for the configuration instruction. ',
+        desc2: 'Leave empty to pick up the default value',
+      },
+      ytdl: 'The youtube-dl Executable File for YtDl',
+      proxy: {
+        title: 'Proxy Server for UNM',
+        desc1:
+          'The proxy server to use for requesting services such as YouTube',
+        desc2: 'Leave empty to pick up the default value',
+      },
+    },
   },
   contextMenu: {
     play: 'Oynat',
@@ -188,6 +236,8 @@ export default {
     minePlaylists: 'My Playlists',
     likedPlaylists: 'Liked Playlists',
     cardiacMode: 'Cardiac Mode',
+    copyLyric: 'Copy Lyric',
+    copyLyricWithTranslation: 'Copy Lyric With Translation',
   },
   toast: {
     savedToMyLikedSongs: 'Beğendiğim Müziklere Kaydet',
